@@ -4,7 +4,7 @@ package compat
 import cats.Functor
 import org.scalacheck.Gen
 
-object scalacheck {
+package scalacheck {
   object cats {
 
     implicit val genFunctor: Functor[Gen] =

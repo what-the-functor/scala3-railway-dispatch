@@ -57,7 +57,7 @@ object Terminal {
 }
 
 /** A train */
-final case class Train(terminal: Terminal, direction: Direction)
+final case class Train(location: Terminal, direction: Direction)
 
 /** A railway line.  There is a minimum of two terminals */
 sealed trait Line {
@@ -105,30 +105,42 @@ object Line {
       }
     }
 
-  implicit val lineReportable: Reportable[Line] =
-    Reportable.of(line => LineReport(line.train.terminal, line.train.direction))
+  implicit val lineReportable: Reportable[Line, LineReport] =
+    Reportable.of[Line, LineReport](line => LineReport(line.train.location, line.train.direction))
 }
 
-case class Railway(first: Line)
+case class Railway private (first: Line, all: ArraySeq[Line])
 object Railway {
+  def apply(line: Line): Railway =
+    Railway(line, ArraySeq(line))
+
+  def apply(first: Line, rest: Line*): Railway =
+    Railway(first, ArraySeq.from(first :: rest.toList))
+
   implicit def railwayReportable(implicit
-      lineReportable: Reportable[Line]
-  ): Reportable[Railway] =
-    Reportable.of(railway => RailwayReport(lineReportable.report(railway.first)))
+      lineReportable: Reportable[Line, LineReport]
+  ): Reportable[Railway, RailwayReport] =
+    Reportable.of { case Railway(first, all) =>
+      RailwayReport(
+        lineReportable.report(first),
+        all.tail.map(lineReportable.report): _*
+      )
+    }
 }
 
-trait Report[A]
+trait Report[+A]
 case class LineReport(trainLocation: Terminal, trainDirection: Direction) extends Report[Line]
-case class RailwayReport(first: Report[Line])                             extends Report[Railway]
+case class RailwayReport(first: LineReport, rest: LineReport*)            extends Report[Railway]
 
-trait Reportable[A] {
-  def report(value: A): Report[A]
+trait Reportable[A, B <: Report[A]] {
+  def report(value: A): B
 }
 object Reportable {
-  def apply[A: Reportable]: Reportable[A] = implicitly
+  def apply[A, B <: Report[A]](implicit r: Reportable[A, B]): Reportable[A, B] =
+    r
 
-  def of[A](f: A => Report[A]): Reportable[A] =
-    new Reportable[A] {
-      def report(value: A): Report[A] = f(value)
+  def of[A, B <: Report[A]](f: A => B): Reportable[A, B] =
+    new Reportable[A, B] {
+      def report(value: A): B = f(value)
     }
 }
