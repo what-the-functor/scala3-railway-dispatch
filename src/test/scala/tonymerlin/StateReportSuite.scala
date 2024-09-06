@@ -10,7 +10,7 @@ import cats.syntax.all.*
 import cats.instances.all.*
 import munit.ScalaCheckSuite
 import org.scalacheck.*
-import tonymerlin.compat.scalacheck.cats.*
+import tonymerlin.compat.scalacheck.cats.given
 
 class StateReportSuite extends ScalaCheckSuite {
   val lineGen: Gen[Valid[Line]] =

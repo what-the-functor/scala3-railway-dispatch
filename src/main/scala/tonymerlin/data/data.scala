@@ -105,7 +105,7 @@ object Line {
       }
     }
 
-  implicit val lineReportable: Reportable[Line, LineReport] =
+  given lineReportable: Reportable[Line, LineReport] =
     Reportable.of[Line, LineReport](line => LineReport(line.train.location, line.train.direction))
 }
 
@@ -117,14 +117,9 @@ object Railway {
   def apply(first: Line, rest: Line*): Railway =
     Railway(first, ArraySeq.from(first :: rest.toList))
 
-  implicit def railwayReportable(implicit
-      lineReportable: Reportable[Line, LineReport]
-  ): Reportable[Railway, RailwayReport] =
+  given railwayReportable(using reportable: Reportable[Line, LineReport]): Reportable[Railway, RailwayReport] =
     Reportable.of { case Railway(first, all) =>
-      RailwayReport(
-        lineReportable.report(first),
-        all.tail.map(lineReportable.report): _*
-      )
+      RailwayReport(reportable.report(first), all.tail.map(reportable.report): _*)
     }
 }
 
@@ -132,15 +127,12 @@ trait Report[+A]
 case class LineReport(trainLocation: Terminal, trainDirection: Direction) extends Report[Line]
 case class RailwayReport(first: LineReport, rest: LineReport*)            extends Report[Railway]
 
-trait Reportable[A, B <: Report[A]] {
-  def report(value: A): B
-}
-object Reportable {
-  def apply[A, B <: Report[A]](implicit r: Reportable[A, B]): Reportable[A, B] =
-    r
+trait Reportable[A, B <: Report[A]]:
+  extension (a: A) def report: B
 
+object Reportable {
   def of[A, B <: Report[A]](f: A => B): Reportable[A, B] =
     new Reportable[A, B] {
-      def report(value: A): B = f(value)
+      extension (value: A) def report: B = f(value)
     }
 }
