@@ -41,10 +41,23 @@ What we will look at:
 
 # State Model
 
+The railway state is implemented by nested immutable arrays.  The outer array represents the railway, and each array that it contains represents a tram line.
+
 ## Line
 Each line is represented internally by an immutable array, `ArraySeq`.  The immutable array data structure is chosen for it's constant-time random access, in order to retrieve the next, and previous terminal.  Furthormore, a line can be thought of as a very simple graph, a _path_ in graph theory terms.  In the example of a /heap/,  binary-tree can be represented by an array.  Therefore, the /heap/ example shows that an array is a suitable structure to represent a /path/ (a simpler structure than a binary-tree).
 
 In-keeping with functional programming style, an immutable array is used.  Among many benifits, this allays any concurrency concerns, such as race conditions.
 
-A /path/ could also be implemented as a /doubly-linked list/.  Scala does not have a doubly-linked list in the standard API.  When an element is added to a doubly-linked list, the entire list has to be rebuilt.  Even though, in this case, the size of the list would not change, instantiation would leave behind more objects on the heap, than instantiation of the immutable array.
+A /path/ could also be implemented as a /doubly-linked list/, though Scala does not have a doubly-linked list in the standard API.  When an element is added to a doubly-linked list, the entire list has to be rebuilt.  Even though, in this case, the size of the list would not change, instantiation would leave behind more objects on the heap, than instantiation of the immutable array.
+
+## Railway
+The railway is implemented as an immutable array of `Line`s.  There must be at minimum one line, and the maximum size is not explicitly limited.
+
+## Train, Terminal, and Direction
+A train is reprented by a product type of `Terminal` and `Direction`.
+`Terminal` is a simple data type to represent a terminal by it's name, a positive `Int`.
+`Direction` is a sum type: `Forward`, and `Backward`.
+
+
+
 

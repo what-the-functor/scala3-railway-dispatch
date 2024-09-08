@@ -56,7 +56,8 @@ object Terminal {
     IntPositive.from(name).map(Terminal(_))
 }
 
-/** A train */
+/** A train. Holds the state of the train's current terminal and direction of travel
+  */
 final case class Train(location: Terminal, direction: Direction)
 
 /** A railway line.  There is a minimum of two terminals */
@@ -78,15 +79,19 @@ final case class LineOfN(
 ) extends Line
 
 object Line {
+
+  /** Create a new railway line with two terminals */
   def apply(first: Terminal, last: Terminal): Line =
     LineOfTwo(Train(first, Forward), first, last)
 
+  /** Create a new railway line with two terminals from the given terminal names */
   def of(first: Int, last: Int): Valid[Line] =
     for
       n1 <- IntPositive.from(first)
       n2 <- IntPositive.from(last)
     yield Line(Terminal(n1), Terminal(n2))
 
+    /** Create a new railway line with more than two terminals */
   def apply(first: Terminal, second: Terminal, rest: Terminal*): Line = {
     val path = ArraySeq.from(first :: second :: rest.toList)
 
@@ -105,32 +110,43 @@ object Line {
       }
     }
 
-  given lineReportable: Reportable[Line, LineReport] =
+  /** Reportable instance for [LIne] */
+  given Reportable[Line, LineReport] =
     Reportable.of[Line, LineReport](line => LineReport(line.train.location, line.train.direction))
 }
 
+/** A railway, which consists of multiple [Lines]
+  *
+  * There is a minimum of one [Line]
+  */
 case class Railway private (first: Line, all: ArraySeq[Line])
 object Railway {
   def apply(line: Line): Railway =
     Railway(line, ArraySeq(line))
 
+    /** Create a railway */
   def apply(first: Line, rest: Line*): Railway =
     Railway(first, ArraySeq.from(first :: rest.toList))
 
+    /** Reportable instance, enables reporting the state of the [RailWay] */
   given railwayReportable(using reportable: Reportable[Line, LineReport]): Reportable[Railway, RailwayReport] =
     Reportable.of { case Railway(first, all) =>
       RailwayReport(reportable.report(first), all.tail.map(reportable.report): _*)
     }
 }
 
+/** Report the status */
 trait Report[+A]
 case class LineReport(trainLocation: Terminal, trainDirection: Direction) extends Report[Line]
 case class RailwayReport(first: LineReport, rest: LineReport*)            extends Report[Railway]
 
+/** Type class to enable reporting */
 trait Reportable[A, B <: Report[A]]:
   extension (a: A) def report: B
 
 object Reportable {
+
+  /** Create a [Reportable] instance */
   def of[A, B <: Report[A]](f: A => B): Reportable[A, B] =
     new Reportable[A, B] {
       extension (value: A) def report: B = f(value)
