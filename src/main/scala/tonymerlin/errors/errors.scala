@@ -1,7 +1,7 @@
 package tonymerlin
 package errors
 
-sealed abstract class RailwayError(msg: String)
+sealed abstract class RailwayError(val msg: String)
 
 case object IntNotPositive extends RailwayError("The value must be positive")
 
