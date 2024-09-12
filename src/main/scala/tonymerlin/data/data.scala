@@ -110,6 +110,10 @@ object Line {
       }
     }
 
+  /** Create a line of the maximum supported length */
+  val max: Valid[Line] =
+    IntMinimumTwo.from(32).map(to)
+
   /** Reportable instance for [LIne] */
   given Reportable[Line, LineReport] =
     Reportable.of[Line, LineReport](line => LineReport(line.train.location, line.train.direction))
@@ -151,4 +155,20 @@ object Reportable {
     new Reportable[A, B] {
       extension (value: A) def report: B = f(value)
     }
+}
+
+/** A pick-up request from the source terminal (by name) to the destination terminal (by name) */
+case class PickupReq(a: Int, b: Int)
+
+/** A pick-up from the source terminal, to the destination terminal */
+case class Pickup(a: Terminal, b: Terminal)
+
+object Pickup {
+
+  /** Create a [Pickup] */
+  def from(a: Int, b: Int) =
+    for
+      ta <- Terminal.from(a)
+      tb <- Terminal.from(b)
+    yield Pickup(ta, tb)
 }

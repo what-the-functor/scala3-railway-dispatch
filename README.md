@@ -4,7 +4,7 @@ Railway dispatching system for the WunderReise GmbH.
 ## Problem Specification
 You’re a railway scheduling expert and you design and implement such systems for a living.
 A new customer, WunderReise GmbH ordered a scheduling system for their airport terminal shuttle railway.
-All their terminals are connected with parallel railway lines, with one dedicated train per line. 
+All their terminals are connected with parallel railway lines, with one dedicated train per line.
 The trains can move back and forth, and they should pick up passengers according to their pickup requests.
 
 Here is an example:
@@ -43,12 +43,15 @@ What we will look at:
 
 The railway state is implemented by nested immutable arrays.  The outer array represents the railway, and each array that it contains represents a tram line.
 
+## Pick-up queue
+The queue of pick-up requests is implemented in-memory as a pure FIFO queue (from Cats Effect 3), in-order to avoid global mutable state.  A production implementation would use a persistent queue for robustness, such as Kafka.
+
 ## Line
 Each line is represented internally by an immutable array, `ArraySeq`.  The immutable array data structure is chosen for it's constant-time random access, in order to retrieve the next, and previous terminal.  Furthormore, a line can be thought of as a very simple graph, a _path_ in graph theory terms.  In the example of a /heap/,  binary-tree can be represented by an array.  Therefore, the /heap/ example shows that an array is a suitable structure to represent a /path/ (a simpler structure than a binary-tree).
 
 In-keeping with functional programming style, an immutable array is used.  Among many benifits, this allays any concurrency concerns, such as race conditions.
 
-A /path/ could also be implemented as a /doubly-linked list/, though Scala does not have a doubly-linked list in the standard API.  When an element is added to a doubly-linked list, the entire list has to be rebuilt.  Even though, in this case, the size of the list would not change, instantiation would leave behind more objects on the heap, than instantiation of the immutable array.
+A /path/ could also be implemented as a /doubly-linked list/, though Scala does not have a doubly-linked list in the standard API.  When an element is added to a doubly-linked list, the entire list has to be rebuilt.  Even though, in this case, the size of the list would not change, instantiation would leave behind more objects on the heap, than instantiation of an immutable array.
 
 ## Railway
 The railway is implemented as an immutable array of `Line`s.  There must be at minimum one line, and the maximum size is not explicitly limited.
@@ -58,6 +61,9 @@ A train is reprented by a product type of `Terminal` and `Direction`.
 `Terminal` is a simple data type to represent a terminal by it's name, a positive `Int`.
 `Direction` is a sum type: `Forward`, and `Backward`.
 
+# Testing and Assured Correctness
+The vector for illegal state is significantly reduced by using type refinement.  For example, `IntPositive` is guaranteed to represent a positive integer, and `Terminal` can only be applied to `IntPositive`.
+The /refined types/ are implemented with a pattern of /case classes/ with private constructors, combined with /smart constructors/ which return a disjunction of the refined type, or an error if the input does not conform (i.e. a negative number in the case of `IntPositive`).
+For a production implementation it would be advantageous to use a refined type library such as /Iron/, or /Refined/.
 
-
-
+The HTTP routing and business logic are verified separately, by utilising loose coupling.

@@ -2,41 +2,53 @@ package tonymerlin
 package http
 package v1
 
-import org.http4s._
-import org.http4s.circe._
-import cats.effect._
-// import org.http4s.implicits._
-import cats.effect.kernel.Async
-import org.http4s.HttpRoutes
-import org.http4s.dsl.Http4sDsl
-import io.circe._
-import io.circe.literal._
-import io.circe.generic.auto._
-import io.circe.syntax._
-import data._
-import data.Railway.given
-import tonymerlin.errors.RailwayError
-import tonymerlin.StateReport.report
-import tonymerlin.data.Backward
-import tonymerlin.data.LineReport
+import cats.effect.kernel.Concurrent
+import cats.effect.kernel.Sync
+import cats.effect.std.Queue
+import cats.syntax.all.*
+import io.circe.*
+import io.circe.generic.auto.*
+import io.circe.syntax.*
+import org.http4s.*
+import org.http4s.circe.*
+import org.http4s.dsl.*
 
-trait Routes[F[_]: Async] extends Codec {
-  val dsl = Http4sDsl[F]; import dsl._
+import data.*
+import errors.RailwayError
 
-  def routes(railway: Valid[Railway]): HttpRoutes[F] =
+trait Routes[F[_]: Sync] extends Codec[F] {
+  val dsl = Http4sDsl[F]
+  import dsl._
+
+  def routes(algebra: Algebra[F], railway: Railway, pickups: Queue[F, Pickup]): HttpRoutes[F] =
     HttpRoutes
-      .of[F] { case GET -> Root / "status" =>
-        railway.map(StateReport.report) match
-          case Right(report) => Ok(report.asJson)
-          case Left(error)   => InternalServerError(error.asJson)
+      .of[F] {
+        case GET -> Root / "status" =>
+          Ok(algebra.status(railway).asJson)
+
+        case req @ POST -> Root / "pickup" =>
+          for
+            pickupReq <- req.as[PickupReq]
+            errorOrPickup <- algebra.enqueue(pickupReq, pickups)
+            resp <-
+              errorOrPickup match
+                case Right(_)    => Accepted()
+                case Left(error) => BadRequest(error.asJson)
+          yield resp
       }
 }
 
-trait Codec {
-  // import io.circe.generic.semiauto._
+trait Codec[F[_]: Concurrent] {
+  import _root_.io.circe.generic.semiauto._
 
   implicit val intPositiveEncoder: Encoder[IntPositive] =
     Encoder[Int].contramap(_.value)
+
+  implicit val intPositiveDecoder: Decoder[Valid[IntPositive]] =
+    Decoder[Int].map(IntPositive.from(_))
+
+  implicit val terminalDecoder: Decoder[Valid[Terminal]] =
+    Decoder[Int].map(Terminal.from(_))
 
   implicit val directionEncoder: Encoder[Direction] =
     Encoder[String].contramap {
@@ -44,4 +56,6 @@ trait Codec {
       case Backward => "backward"
     }
 
+  implicit val pickupDecoder: Decoder[PickupReq] = deriveDecoder
+  implicit val pickupEntityDecoder: EntityDecoder[F, PickupReq] = jsonOf[F, PickupReq]
 }

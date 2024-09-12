@@ -1,38 +1,38 @@
 package tonymerlin
 
-import cats.effect._
-import org.http4s.implicits._
-import org.http4s.ember.server._
-import com.comcast.ip4s._
+import cats.effect.*
+import cats.effect.std.Queue
+import cats.syntax.all.*
+import com.comcast.ip4s.*
+import org.http4s.ember.server.*
+import org.http4s.implicits.*
+import tonymerlin.data.*
+import tonymerlin.http.v1.Routes
 
 import http.v1
-import tonymerlin.data.Railway
-import tonymerlin.data.RailwayReport
-import tonymerlin.data.Line
-import tonymerlin.data.LineOfTwo
-import tonymerlin.errors.RailwayError
-import tonymerlin.data.Valid
 
-trait RailwayState {
-  def status(railway: Railway): RailwayReport =
-    StateReport.report(railway)
-}
-
-object V1Routes extends v1.Routes[IO]
+object V1Routes extends Routes[IO]
 
 object Main extends IOApp {
 
-  val initialRailway: Valid[Railway] =
-    Line.of(1, 2).map(Railway(_))
+  val railwayOrError: Valid[Railway] =
+    for
+      first <- Line.max
+      rest <- (2 to 32).toList.traverse(_ => Line.max)
+    yield Railway(first, rest: _*)
 
   def run(args: List[String]): IO[ExitCode] =
-    EmberServerBuilder
-      .default[IO]
-      .withHost(ipv4"0.0.0.0")
-      .withPort(port"8080")
-      .withHttpApp(V1Routes.routes(initialRailway).orNotFound)
-      .build
-      .use(_ => IO.never)
-      .as(ExitCode.Success)
-
+    for
+      railway <- IO.fromEither(railwayOrError.leftMap(e => new Throwable(s"Invalid railway: ${e.msg}")))
+      queue <- Queue.unbounded[IO, Pickup]
+      server <-
+        EmberServerBuilder
+          .default[IO]
+          .withHost(ipv4"0.0.0.0")
+          .withPort(port"8080")
+          .withHttpApp(V1Routes.routes(Algebra[IO], railway, queue).orNotFound)
+          .build
+          .use(_ => IO.never)
+          .as(ExitCode.Success)
+    yield server
 }
