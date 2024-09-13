@@ -35,6 +35,12 @@ trait Routes[F[_]: Sync] extends Codec[F] {
                 case Right(_)    => Accepted()
                 case Left(error) => BadRequest(error.asJson)
           yield resp
+
+        case POST -> Root / "step" =>
+          algebra
+            .step(railway, pickups)
+            .flatMap(_ => Accepted())
+            .handleErrorWith(e => InternalServerError(e.getMessage))
       }
 }
 

@@ -1,29 +1,12 @@
 package tonymerlin
 package data
 
-import errors.*
-import org.scalacheck.Gen.*
-import org.scalacheck.Prop.*
-import cats.*
-import cats.data.*
-import cats.syntax.all.*
-import cats.instances.all.*
 import munit.ScalaCheckSuite
 import org.scalacheck.*
-import tonymerlin.compat.scalacheck.cats.given
 
-class StateReportSuite extends ScalaCheckSuite {
-  val lineGen: Gen[Valid[Line]] =
-    EitherT(Gen.choose(2, 32).map(IntMinimumTwo.from)).map(Line.to).value
+import Prop.*
 
-  def lineGenM(n: Int): Gen[Valid[List[Line]]] =
-    Gen
-      .containerOfN[List, Either[RailwayError, Line]](n, lineGen)
-      .map(_.sequence)
-
-  def railwayGenN(n: Int): Gen[Valid[Railway]] =
-    EitherT(lineGenM(n)).map(lines => Railway(lines.head, lines.tail: _*)).value
-
+class StateReportSuite extends ScalaCheckSuite with Fixtures {
   property("Line state is reportable") {
     forAll(lineGen) { (line: Valid[Line]) =>
       val result: Valid[LineReport] = line.map(StateReport.report(_))

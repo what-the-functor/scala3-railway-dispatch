@@ -9,10 +9,8 @@ import io.circe.*
 import io.circe.literal.*
 import munit.CatsEffectSuite
 import org.http4s.*
-import org.http4s.HttpApp
 import org.http4s.circe.*
 import org.http4s.implicits.*
-
 import tonymerlin.data.*
 
 object DummyAlgebra extends Algebra[IO] {
@@ -38,18 +36,27 @@ class RouteSuite extends CatsEffectSuite {
     }
 
   test("status")({
-    val response: IO[Response[IO]] =
-      service.flatMap(_.run(Request(Method.GET, uri"/status")))
-
-    assertIO(response.map(_.status), Status.Ok)
+    val request: Request[IO] = Request(Method.GET, uri"/status")
+    assertStatus(request, Status.Ok)
   })
 
-  test("pickup") {
+  test("pickup - accepted") {
     val request: Request[IO] =
       Request(Method.POST, uri"/pickup").withEntity(json"""{"a": "1", "b": "2"}""")
-    val response: IO[Response[IO]] =
-      service.flatMap(_.run(request))
-
-    assertIO(response.map(_.status), Status.Accepted)
+    assertStatus(request, Status.Accepted)
   }
+
+  test("pickup -  bad request") {
+    val request: Request[IO] =
+      Request(Method.POST, uri"/pickup").withEntity("""{"a": "-1", "b": "2"}""")
+    assertStatus(request, Status.BadRequest)
+  }
+
+  test("step") {
+    val request: Request[IO] = Request(Method.POST, uri"/step")
+    assertStatus(request, Status.Accepted)
+  }
+
+  def assertStatus(req: Request[IO], status: Status): IO[Unit] =
+    assertIO(service.flatMap(_.run(req)).map(_.status), status)
 }

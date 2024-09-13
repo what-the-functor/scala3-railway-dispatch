@@ -9,6 +9,9 @@ import data.*
 trait Algebra[F[_]: Sync] {
   def status: Railway => RailwayReport
   def enqueue(req: PickupReq, pickups: Queue[F, Pickup]): F[Valid[Pickup]]
+
+  /** Move the railway state forward by one step */
+  def step(railway: Railway, queue: Queue[F, Pickup]): F[Unit] = Sync[F].unit
 }
 
 object Algebra {
