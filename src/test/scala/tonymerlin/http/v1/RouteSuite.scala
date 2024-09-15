@@ -3,7 +3,7 @@ package http.v1
 
 import cats.*
 import cats.effect.*
-import cats.effect.std.Queue
+import cats.effect.std.Dequeue
 import cats.syntax.either.*
 import io.circe.*
 import io.circe.literal.*
@@ -14,9 +14,12 @@ import org.http4s.implicits.*
 import tonymerlin.data.*
 
 object DummyAlgebra extends Algebra[IO] {
+
   val status = StateReport.report
 
-  def enqueue(req: PickupReq, pickups: Queue[IO, Pickup]): IO[Valid[Pickup]] = {
+  def step(railway: Railway, pickups: Dequeue[IO, Pickup]): IO[Railway] = IO.pure(railway)
+
+  def enqueue(req: PickupReq, pickups: Dequeue[IO, Pickup]): IO[Valid[Pickup]] = {
     val PickupReq(a, b) = req
     IO.pure(Pickup.from(a, b))
   }
@@ -25,10 +28,10 @@ object DummyAlgebra extends Algebra[IO] {
 object fixture extends Routes[IO]
 
 class RouteSuite extends CatsEffectSuite {
-  val railwayF: IO[Railway] =
-    IO.fromEither(Line.of(1, 2).map(Railway(_)).leftMap(_ => new Throwable))
+  val railwayF: IO[Ref[IO, Railway]] =
+    Ref.ofEffect(IO.fromEither(Line.of(1, 2).map(Railway(_)).leftMap(_ => new Throwable)))
 
-  val emptyQueue: IO[Queue[IO, Pickup]] = Queue.unbounded[IO, Pickup]
+  val emptyQueue: IO[Dequeue[IO, Pickup]] = Dequeue.unbounded[IO, Pickup]
 
   val service: IO[HttpApp[IO]] =
     railwayF.flatMap { railway =>

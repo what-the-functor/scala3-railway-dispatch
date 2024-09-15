@@ -1,17 +1,17 @@
 package tonymerlin
 
 import cats.effect.kernel.Sync
-import cats.effect.std.Queue
 import cats.syntax.all.*
 
 import data.*
+import cats.effect.std.Dequeue
 
 trait Algebra[F[_]: Sync] {
   def status: Railway => RailwayReport
-  def enqueue(req: PickupReq, pickups: Queue[F, Pickup]): F[Valid[Pickup]]
+  def enqueue(req: PickupReq, pickups: Dequeue[F, Pickup]): F[Valid[Pickup]]
 
   /** Move the railway state forward by one step */
-  def step(railway: Railway, queue: Queue[F, Pickup]): F[Unit] = Sync[F].unit
+  def step(railway: Railway, pickups: Dequeue[F, Pickup]): F[Railway]
 }
 
 object Algebra {
@@ -19,9 +19,13 @@ object Algebra {
     new Algebra[F] {
       val status: Railway => RailwayReport = StateReport.report
 
-      def enqueue(req: PickupReq, pickups: Queue[F, Pickup]): F[Valid[Pickup]] = {
+      // TODO validate terminals
+      def enqueue(req: PickupReq, pickups: Dequeue[F, Pickup]): F[Valid[Pickup]] = {
         val PickupReq(a, b) = req
         Pickup.from(a, b).traverse(pickup => pickups.offer(pickup).map(_ => pickup))
       }
+
+      def step(railway: Railway, pickups: Dequeue[F, Pickup]): F[Railway] =
+        railway.step(pickups)
     }
 }

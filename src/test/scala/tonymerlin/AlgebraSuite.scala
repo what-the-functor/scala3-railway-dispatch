@@ -1,7 +1,7 @@
 package tonymerlin
 
 import cats.effect.IO
-import cats.effect.std.Queue
+import cats.effect.std.Dequeue
 import cats.effect.unsafe.IORuntime
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
@@ -25,8 +25,8 @@ class AlgebraSuite extends munit.CatsEffectSuite with ScalaCheckEffectSuite {
   test("Pickup is enqueued") {
     PropF.forAllF(pickupReqGen) { (req: PickupReq) =>
       for
-        queue <- Queue.unbounded[IO, Pickup]
-        _ <- algebra.enqueue(req, queue)
+        queue  <- Dequeue.unbounded[IO, Pickup]
+        _      <- algebra.enqueue(req, queue)
         pickup <- queue.take
         expected = Pickup.from(req.a, req.b)
       yield assert(expected.forall(pickup == _))

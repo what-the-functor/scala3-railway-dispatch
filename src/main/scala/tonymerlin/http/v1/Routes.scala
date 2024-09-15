@@ -4,7 +4,6 @@ package v1
 
 import cats.effect.kernel.Concurrent
 import cats.effect.kernel.Sync
-import cats.effect.std.Queue
 import cats.syntax.all.*
 import io.circe.*
 import io.circe.generic.auto.*
@@ -15,20 +14,26 @@ import org.http4s.dsl.*
 
 import data.*
 import errors.RailwayError
+import cats.effect.std.Dequeue
+import cats.effect.kernel.Ref
 
 trait Routes[F[_]: Sync] extends Codec[F] {
   val dsl = Http4sDsl[F]
   import dsl._
 
-  def routes(algebra: Algebra[F], railway: Railway, pickups: Queue[F, Pickup]): HttpRoutes[F] =
+  def routes(algebra: Algebra[F], railwayRef: Ref[F, Railway], pickups: Dequeue[F, Pickup]): HttpRoutes[F] =
     HttpRoutes
       .of[F] {
         case GET -> Root / "status" =>
-          Ok(algebra.status(railway).asJson)
+          for
+            railway <- railwayRef.get
+            qSize   <- pickups.size
+            resp    <- Ok((qSize, algebra.status(railway)).asJson)
+          yield resp
 
         case req @ POST -> Root / "pickup" =>
           for
-            pickupReq <- req.as[PickupReq]
+            pickupReq     <- req.as[PickupReq]
             errorOrPickup <- algebra.enqueue(pickupReq, pickups)
             resp <-
               errorOrPickup match
@@ -37,10 +42,14 @@ trait Routes[F[_]: Sync] extends Codec[F] {
           yield resp
 
         case POST -> Root / "step" =>
-          algebra
-            .step(railway, pickups)
-            .flatMap(_ => Accepted())
-            .handleErrorWith(e => InternalServerError(e.getMessage))
+          for
+            railway <- railwayRef.get
+            updated <- algebra.step(railway, pickups)
+            _       <- railwayRef.update(_ => updated)
+            resp <-
+              if railway == updated then Accepted("Unchanged")
+              else Accepted("Changed")
+          yield resp
       }
 }
 
@@ -62,6 +71,6 @@ trait Codec[F[_]: Concurrent] {
       case Backward => "backward"
     }
 
-  implicit val pickupDecoder: Decoder[PickupReq] = deriveDecoder
+  implicit val pickupDecoder: Decoder[PickupReq]                = deriveDecoder
   implicit val pickupEntityDecoder: EntityDecoder[F, PickupReq] = jsonOf[F, PickupReq]
 }
