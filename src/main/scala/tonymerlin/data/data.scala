@@ -359,7 +359,7 @@ case class Railway private (first: Line, all: ArraySeq[Line]) {
           railwayAndMoveIndicesF
             .flatMap { case (railway, moveIndices) =>
               maybeEmbarkIndex
-                .flatMap(embarkByIndex.curried(pickup))
+                .flatMap(railway.embarkByIndex.curried(pickup))
                 .map(Sync[F].pure)
                 .getOrElse(pickups.offer(pickup).map(_ => railway))
                 .map((_, toMoveIndex.toSet ++ moveIndices))
