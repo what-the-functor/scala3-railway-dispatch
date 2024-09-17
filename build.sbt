@@ -24,7 +24,7 @@ scalacOptions ++= Seq(
   "UTF-8",
   "-feature",
   "-unchecked",
-  "-Wunused:imports,privates,locals",
+  "-Wunused:all",
   "-explain-types",
   "-new-syntax",
   "-rewrite"

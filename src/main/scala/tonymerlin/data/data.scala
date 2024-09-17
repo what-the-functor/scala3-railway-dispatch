@@ -21,28 +21,31 @@ final case class IntPositive private (val value: Int) extends AnyVal
 
 object IntPositive {
 
-  /** Create a positive int from an [Int] or else [scala.util.Left] of [tonymerlin.errors.IntNotPositive]
-    */
+  /** Create a positive int from an [Int] or else [scala.util.Left] of [tonymerlin.errors.IntNotPositive] */
   def from(value: Int): Valid[IntPositive] =
     Right(new IntPositive(value))
       .filterOrElse(_.value > 0, IntNotPositive)
 
-  /** [IntMinimumTwo] is known to be positive, so we can create a positive int from it
-    */
+  /** [IntMinimumTwo] is known to be positive, it can be used to create [IntPositive] */
   def from(knownPositive: IntMinimumTwo): IntPositive =
     IntPositive(knownPositive.value)
 
+  /** Create [IntPositive]s from 1 to end (inclusive) */
   def inRangeTo(knownPositive: IntMinimumTwo): IndexedSeq[IntPositive] =
     (1 to knownPositive.value).map(IntPositive(_))
 
+  /** [IntPositive] of 1 */
   val one: IntPositive = IntPositive(1)
 
+  /** The previous [IntPositive] if it is positive, otherwise [scala.None] */
   def prev(x: IntPositive): Option[IntPositive] =
     Option(x).filter(_.value > 1).map(_.value - 1).flatMap(IntPositive.from(_).toOption)
 
+  /** The next [IntPositive] if it is less than, or equal to the maximum value of [scala.Int], otherwise [scala.None] */
   def next(x: IntPositive): Option[IntPositive] =
     Option(x).filter(_.value < Int.MaxValue).map(_.value + 1).flatMap(IntPositive.from(_).toOption)
 
+  /** Ordering instance for [IntPositive] */
   given Ordering[IntPositive] =
     new Ordering[IntPositive] {
       def compare(x: IntPositive, y: IntPositive): Int = x.value.compare(y.value)
@@ -87,17 +90,29 @@ object Terminal {
 /** A train. Holds the state of the train's current terminal and direction of travel
   */
 sealed trait Train {
+
+  /** The train's current location */
   def location: Terminal
+
+  /** The direction of travel */
   def direction: Direction
+
+  /** Predicates whether or not the train is non-empty (carrying passengers) */
   def nonEmpty: Boolean
 
+  /** Predicates whether or not the train is empty (inverse of nonEmpty) */
   lazy val isEmpty: Boolean = !nonEmpty
 
-  def embark(pickup: Pickup): TrainWithPickups
+  /** Embark the pickup request */
+  def embark(pickup: Pickup): NonEmptyTrain
+
+  /** Dissembark any pickup requests which are at their destination */
   def dissembark: Train
 
+  /** Move the train to the specified terminal, and set it's direction */
   def move(location: Terminal, direction: Direction): Train
 
+  /** Move the train to the next terminal, based on the current direction */
   def move(line: Line): Option[Train] =
     direction match
       case Forward =>
@@ -112,27 +127,29 @@ sealed trait Train {
         }
 }
 
+/** An empty train, not occupied by any passengers */
 final case class EmptyTrain(location: Terminal, direction: Direction) extends Train {
   val nonEmpty: Boolean = false
 
-  def embark(pickup: Pickup): TrainWithPickups =
-    TrainWithPickups(location, direction, NonEmptyMap.one(pickup.b, NonEmptyList.one(pickup)))
+  def embark(pickup: Pickup): NonEmptyTrain =
+    NonEmptyTrain(location, direction, NonEmptyMap.one(pickup.b, NonEmptyList.one(pickup)))
 
-  def dissembark: Train = this
+  val dissembark: Train = this
 
   def move(newLocation: Terminal, newDirection: Direction): Train =
     this.copy(location = newLocation, direction = newDirection)
 
 }
 
-final case class TrainWithPickups(
+/** A non-empty train, which is carrying passengers */
+final case class NonEmptyTrain(
     location: Terminal,
     direction: Direction,
     pickups: NonEmptyMap[Terminal, NonEmptyList[Pickup]]
 ) extends Train {
   val nonEmpty: Boolean = true
 
-  def embark(pickup: Pickup): TrainWithPickups =
+  def embark(pickup: Pickup): NonEmptyTrain =
     this.copy(pickups =
       this.pickups
         .lookup(pickup.b)
@@ -157,8 +174,14 @@ object Train {
 
 /** A railway line.  There is a minimum of two terminals */
 sealed trait Line {
+
+  /** The train, each line has exactly one */
   def train: Train
+
+  /** Direct access to the first terminal */
   def first: Terminal
+
+  /** Direct access to the last terminal */
   def last: Terminal
 
   /** Embark the pickup on the line's train */
@@ -238,7 +261,7 @@ object Line {
     Reportable.of[Line, LineReport] { line =>
       line.train match {
         case EmptyTrain(location, direction) => LineReport(location, direction, List())
-        case TrainWithPickups(location, direction, pickups) =>
+        case NonEmptyTrain(location, direction, pickups) =>
           LineReport(location, direction, pickups.toList.flatMap(_.toList))
       }
     }
@@ -251,20 +274,11 @@ object Line {
 case class Railway private (first: Line, all: ArraySeq[Line]) {
   val roundTripDistance: Int = all.size * 2 - 2
 
-  /** Handle the pick-up request, to embark the passenger on the first train if available, optionally returning the
-    * updated [Railway]
+  /** Handle the pick-up request, to embark the passenger on the train by index, optionally returning the updated
+    * [Railway]
     *
-    * Returns None, if no lines are available
+    * Returns None, if the line index is out-of-bounds
     */
-  def embark(pickup: Pickup): Option[Railway] = {
-    val pickupDirection: Direction = if pickup.a < pickup.b then Forward else Backward
-
-    Option(all.indexWhere((line: Line) => line.train.direction == pickupDirection && line.train.location == pickup.a))
-      .filter(_ >= 0)
-      .map(index => all.updated(index, all(index).embark(pickup)))
-      .map(lines => this.copy(first = lines(0), all = lines))
-  }
-
   def embarkByIndex(pickup: Pickup, index: Int): Option[Railway] =
     index
       .pure[Option]
@@ -273,25 +287,7 @@ case class Railway private (first: Line, all: ArraySeq[Line]) {
       .map(i => all.updated(i, all(i).embark(pickup)))
       .map(lines => this.copy(first = lines(0), all = lines))
 
-  val pickupDirection: Pickup => Direction = p => if p.a < p.b then Forward else Backward
-
-  def embarkableIndex(pickup: Pickup): Option[Int] =
-    all
-      .indexWhere(line => line.train.direction == pickupDirection(pickup) && line.train.location == pickup.a)
-      .pure[Option]
-      .filter(_ >= 0)
-
-  def closestIndex(pickup: Pickup): Option[Int] =
-    all
-      .to(LazyList)
-      .filter(_.train.direction == pickupDirection)
-      .sortWith { (lineA, lineB) =>
-        lineA.train.location.name.value.compareTo(pickup.a.name.value) <
-          lineB.train.location.name.value.compareTo(pickup.a.name.value)
-      }
-      .headOption
-      .map(_.train.location.name.value - 1)
-
+  /** Find indices of line to embark (first element), and line to move (second element) */
   def indicesFor(pickup: Pickup): (Option[Int], Option[Int]) = {
 
     val byDistance: SortedMap[Int, (Line, Int)] =
@@ -300,7 +296,7 @@ case class Railway private (first: Line, all: ArraySeq[Line]) {
           .to(LazyList)
           .zipWithIndex
           .map {
-            case (line, i) if line.train.direction == pickupDirection(pickup) =>
+            case (line, i) if line.train.direction == pickup.direction =>
               val distance = pickup.a.name.value - line.train.location.name.value
               (if distance >= 0 then distance else roundTripDistance + distance, (line, i))
 
@@ -325,13 +321,11 @@ case class Railway private (first: Line, all: ArraySeq[Line]) {
     (immediatelyAvailable, immediatelyAvailable.orElse(closest))
   }
 
+  /** Dissembark all pickups which are at their destination */
   def dissembark: Railway =
     this.copy(all = all.map(_.dissembark))
 
-  /** Move occupied trains by one terminal */
-  def move: Railway =
-    all.traverse(_.move).map(moved => this.copy(moved(0), moved)).getOrElse(this)
-
+  /** Move trains by one terminal */
   def moveByIndices(indices: Int*): Railway = {
     val maybeMovedLines: List[Option[(Int, Line)]] = indices.toList.map(i => (i, all(i).move).sequence)
 
@@ -377,6 +371,8 @@ case class Railway private (first: Line, all: ArraySeq[Line]) {
 }
 
 object Railway {
+
+  /** Create a railway with one line */
   def apply(line: Line): Railway =
     Railway(line, ArraySeq(line))
 
@@ -414,7 +410,12 @@ object Reportable {
 case class PickupReq(a: Int, b: Int)
 
 /** A pick-up from the source terminal, to the destination terminal */
-case class Pickup(a: Terminal, b: Terminal)
+case class Pickup(a: Terminal, b: Terminal) {
+
+  /** The direction of the pickup */
+  def direction: Direction = if a < b then Forward else Backward
+
+}
 
 object Pickup {
 
@@ -424,4 +425,5 @@ object Pickup {
       ta <- Terminal.from(a)
       tb <- Terminal.from(b)
     yield Pickup(ta, tb)
+
 }
