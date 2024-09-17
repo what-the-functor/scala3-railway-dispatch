@@ -9,5 +9,7 @@ case object IntLessThanTwo extends RailwayError("The minimum value is two")
 
 case object InvalidPickupSource extends RailwayError("The pickup source terminal does not exist in this railway")
 
-case object InvalidPickupDestiniation
+case object InvalidPickupDestination
     extends RailwayError("The pickup destination terminal does not exist in this railway")
+
+case object InvalidPickupNoDiff extends RailwayError("The pickup source and destination must differ")

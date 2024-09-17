@@ -26,7 +26,7 @@ class AlgebraSuite extends munit.CatsEffectSuite with ScalaCheckEffectSuite {
     PropF.forAllF(pickupReqGen) { (req: PickupReq) =>
       for
         queue  <- Dequeue.unbounded[IO, Pickup]
-        _      <- algebra.enqueue(req, queue)
+        _      <- algebra.enqueue(queue, req)
         pickup <- queue.take
         expected = Pickup.from(req.a, req.b)
       yield assert(expected.forall(pickup == _))

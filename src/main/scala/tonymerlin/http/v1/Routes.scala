@@ -5,6 +5,7 @@ package v1
 import cats.effect.kernel.Concurrent
 import cats.effect.kernel.Sync
 import cats.syntax.all.*
+import cats.instances.all.*
 import io.circe.*
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -13,7 +14,7 @@ import org.http4s.circe.*
 import org.http4s.dsl.*
 
 import data.*
-import errors.RailwayError
+import errors.*
 import cats.effect.std.Dequeue
 import cats.effect.kernel.Ref
 
@@ -33,8 +34,13 @@ trait Routes[F[_]: Sync] extends Codec[F] {
 
         case req @ POST -> Root / "pickup" =>
           for
-            pickupReq     <- req.as[PickupReq]
-            errorOrPickup <- algebra.enqueue(pickupReq, pickups)
+            pickupReq <- req.as[PickupReq]
+            maybeValidReq = Either
+              .right[RailwayError, PickupReq](pickupReq)
+              .ensure(InvalidPickupSource)(req => req.a >= 1 && req.a <= 32)
+              .ensure(InvalidPickupDestination)(req => req.b >= 1 && req.b <= 32)
+              .ensure(InvalidPickupNoDiff)(req => req.a != req.b)
+            errorOrPickup <- maybeValidReq.flatTraverse(algebra.enqueue.curried(pickups))
             resp <-
               errorOrPickup match
                 case Right(_)    => Accepted()

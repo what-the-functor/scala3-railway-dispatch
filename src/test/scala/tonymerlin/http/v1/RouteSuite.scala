@@ -19,7 +19,7 @@ object DummyAlgebra extends Algebra[IO] {
 
   def step(railway: Railway, pickups: Dequeue[IO, Pickup]): IO[Railway] = IO.pure(railway)
 
-  def enqueue(req: PickupReq, pickups: Dequeue[IO, Pickup]): IO[Valid[Pickup]] = {
+  def enqueue(pickups: Dequeue[IO, Pickup], req: PickupReq): IO[Valid[Pickup]] = {
     val PickupReq(a, b) = req
     IO.pure(Pickup.from(a, b))
   }
